@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>YouTube Shadowing Tool</title>
+  <style>
+    :root {
+      --primary: #2196F3;
+      --secondary: #4CAF50;
+      --background: #f5f5f5;
+      --surface: #ffffff;
+      --text: #333333;
+      --border: #e0e0e0;
+      --shadow: rgba(0, 0, 0, 0.1);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: var(--background);
+      color: var(--text);
+      line-height: 1.6;
+    }
+
+    h1 {
+      color: var(--primary);
+      text-align: center;
+      margin: 0 0 20px;
+      font-weight: 500;
+    }
+
+    #fixedControls {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      background: var(--surface);
+      box-shadow: 0 2px 8px var(--shadow);
+      padding: 20px;
+      z-index: 100;
+    }
+
+    #playerContainer {
+      max-width: 640px;
+      margin: 0 auto 20px;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px var(--shadow);
+    }
+
+    #player {
+      width: 100%;
+      aspect-ratio: 16/9;
+    }
+
+    .input-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      align-items: center;
+    }
+
+    input[type="text"],
+    input[type="number"] {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      flex: 1;
+      font-size: 14px;
+    }
+
+    button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      font-weight: 500;
+    }
+
+    button:hover {
+      background: #1976D2;
+      transform: translateY(-1px);
+    }
+
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    #scrollableSegments {
+      margin-top: 600px;
+      padding: 20px;
+    }
+
+    #presetSegments {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+
+    #presetSegments > div {
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 15px;
+      box-shadow: 0 2px 8px var(--shadow);
+      transition: transform 0.2s;
+    }
+
+    #presetSegments > div:hover {
+      transform: translateY(-2px);
+    }
+
+    .segment-controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .segment-controls button {
+      flex: 1;
+      min-width: 120px;
+    }
+
+    canvas {
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+
+    .waveform-container {
+      background: #fafafa;
+      padding: 10px;
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+
+    .project-controls {
+      display: flex;
+      gap: 10px;
+      margin: 20px 0;
+      justify-content: center;
+    }
+
+    /* Add subtle animations */
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .fade-in {
+      animation: fadeIn 0.3s ease-in;
+    }
+  </style>
+</head>
+<body>
+  <div id="fixedControls">
+    <h1>YouTube Shadowing Tool</h1>
+    
+    <div class="input-group">
+      <input type="text" id="videoUrl" placeholder="Enter YouTube URL or video ID" />
+      <button id="loadVideo">Load Video</button>
+    </div>
+
+    <div id="playerContainer">
+      <div id="player"></div>
+    </div>
+
+    <div class="segment-controls">
+      <button id="playVideo">Play</button>
+      <button id="pauseVideo">Pause</button>
+      <button id="recordAudio">Record</button>
+      <button id="stopRecording" disabled>Stop</button>
+    </div>
+
+    <div class="project-controls">
+      <button id="saveProject">Save Project</button>
+      <input type="file" id="loadProjectFile" accept=".json" style="display: none"/>
+      <button id="loadProject">Load Project</button>
+    </div>
+  </div>
+
+  <div id="scrollableSegments">
+    <div id="segmentSelection">
+      <label for="segmentStart">Segment Start (sec):</label>
+      <input type="number" id="segmentStart" value="0" min="0"/>
+      <label for="segmentEnd">Segment End (sec):</label>
+      <input type="number" id="segmentEnd" value="10" min="1"/>
+      <button id="playSegment">Play Segment</button>
+      <button id="analyzeVideo">Analyze Video</button>
+      <p>
+        Alternatively, you can <a href="https://downsub.com/" target="_blank">download subtitles from Downsub</a>
+        and upload them below for analysis:
+      </p>
+      <input type="file" id="subtitleFile" accept=".srt"/>
+      <button id="uploadSubtitle">Analyze Uploaded Subtitle</button>
+      <div id="presetSegments">Preset segments will appear here.</div>
+    </div>
+  </div>
+  
+  <!-- JavaScript Section -->
+  <script>
+    // Variable and Recorder Declarations
+    var player, videoId = "";
+    var segmentRecorders = {}, segmentRecordedChunks = {}, segmentAudioBlobs = {};
+    let mediaRecorder, recordedChunks = [];
+
+    // Add new audio context and capture setup
+    var audioContext = new AudioContext();
+    var audioDestination = audioContext.createMediaStreamDestination();
+    var mediaSource = null;
+
+    // Load YouTube IFrame API
+    var tag = document.createElement('script');
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.getElementsByTagName('script')[0].parentNode.insertBefore(tag, null);
+
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player('player', {
+        height: '360', width: '640',
+        videoId: 'dQw4w9WgXcQ',
+        events: { 'onReady': onPlayerReady }
+      });
+    }
+    function onPlayerReady(event) { console.log("Player is ready"); }
+
+    // Event Listeners
+    document.getElementById("loadVideo").addEventListener("click", function() {
+      var input = document.getElementById("videoUrl").value.trim();
+      if (input) {
+        if (input.includes("youtu")) {
+          try { 
+            let url = new URL(input);
+            videoId = url.searchParams.get("v") || input.split("/").pop();
+          } catch(e) { videoId = input; }
+        } else videoId = input;
+        player.loadVideoById(videoId);
+      }
+    });
+    document.getElementById("playVideo").addEventListener("click", () => player.playVideo());
+    document.getElementById("pauseVideo").addEventListener("click", () => player.pauseVideo());
+    document.getElementById("playSegment").addEventListener("click", function() {
+      var start = parseFloat(document.getElementById("segmentStart").value);
+      var end = parseFloat(document.getElementById("segmentEnd").value);
+      if (start >= 0 && end > start) {
+        player.seekTo(start, true); player.playVideo();
+        var checkInterval = setInterval(() => {
+          if (player.getCurrentTime() >= end) {
+            player.pauseVideo();
+            clearInterval(checkInterval);
+          }
+        }, 500);
+      }
+    });
+    document.getElementById("analyzeVideo").addEventListener("click", analyzeVideo);
+    document.getElementById("uploadSubtitle").addEventListener("click", function() {
+      var fileInput = document.getElementById("subtitleFile");
+      if (fileInput.files.length === 0) {
+        alert("Please select a subtitle file.");
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var segments = parseSRT(e.target.result);
+        if (segments.length === 0) {
+          alert("No subtitle segments found.");
+          return;
+        }
+        displaySegments(segments);
+      };
+      reader.readAsText(fileInput.files[0]);
+    });
+    document.getElementById("recordAudio").addEventListener("click", async function() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        recordedChunks = [];
+        mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop = function() {
+          var blob = new Blob(recordedChunks, { type: 'audio/webm' });
+          var audioURL = URL.createObjectURL(blob);
+          document.getElementById("recordedAudio").src = audioURL;
+          document.getElementById("downloadLink").href = audioURL;
+          
+          // Draw recorded waveform on the new canvas
+          var recordedCanvas = document.getElementById("recordedWaveformCanvas");
+          var audioContext = new AudioContext();
+          var reader = new FileReader();
+          reader.onload = function(e) {
+            audioContext.decodeAudioData(e.target.result, buffer => drawWaveform(buffer, recordedCanvas));
+          };
+          reader.readAsArrayBuffer(blob);
+        };
+        mediaRecorder.start();
+        document.getElementById("recordAudio").disabled = true;
+        document.getElementById("stopRecording").disabled = false;
+        console.log("Recording started");
+      } catch (err) {
+        console.error(err);
+        alert("Microphone access required.");
+      }
+    });
+    document.getElementById("stopRecording").addEventListener("click", function() {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+        document.getElementById("recordAudio").disabled = false;
+        document.getElementById("stopRecording").disabled = true;
+        console.log("Recording stopped");
+      }
+    });
+    document.getElementById("playRecordingBtn").addEventListener("click", () => {
+      document.getElementById("recordedAudio").play();
+    });
+    document.getElementById("saveProject").addEventListener("click", saveProject);
+    document.getElementById("loadProject").addEventListener("click", loadProject);
+
+    // Function Definitions
+    function analyzeVideo() {
+      if (!videoId) { alert("Please load a video first."); return; }
+      getSubtitlesFromVideo(videoId).then(displaySegments).catch(function(err) {
+        console.error(err);
+        alert("Could not fetch subtitles. Falling back on default segmentation.");
+        var duration = player.getDuration();
+        var fallbackSegments = [];
+        for (let start = 0, i = 0; start < duration; start += 10, i++) {
+          fallbackSegments.push({ start: start, end: Math.min(start + 10, duration), text: "Segment " + (i + 1) });
+        }
+        displaySegments(fallbackSegments);
+      });
+    }
+    function getSubtitlesFromVideo(videoId) {
+      var baseUrl = "https://video.google.com/timedtext?lang=en&v=" + videoId;
+      return fetchSubtitles(baseUrl).then(segments => {
+        if (segments.length === 0) {
+          var autoUrl = baseUrl + "&kind=asr";
+          return fetchSubtitles(autoUrl).then(autoSegments => {
+            if (autoSegments.length === 0) return Promise.reject("No subtitles available.");
+            return autoSegments;
+          });
+        }
+        return segments;
+      });
+    }
+    function fetchSubtitles(url) {
+      return fetch(url)
+        .then(response => { if (!response.ok) throw new Error("Network error"); return response.text(); })
+        .then(data => {
+          var parser = new DOMParser(), xmlDoc = parser.parseFromString(data, "application/xml");
+          var texts = xmlDoc.getElementsByTagName("text"), segments = [];
+          for (let i = 0; i < texts.length; i++) {
+            let start = parseFloat(texts[i].getAttribute("start")),
+                dur = parseFloat(texts[i].getAttribute("dur")),
+                text = texts[i].textContent;
+            if (text.trim() !== "") segments.push({ start: start, end: start + dur, text: text });
+          }
+          return segments;
+        });
+    }
+    function parseSRT(srtText) {
+      srtText = srtText.trim();
+      var blocks = srtText.split(/\r?\n\r?\n/), segments = [];
+      blocks.forEach(block => {
+        var lines = block.split(/\r?\n/);
+        if (lines.length >= 3) {
+          var timeLine = lines[1],
+              match = timeLine.match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})\s*-->\s*(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+          if (match) {
+            let start = parseInt(match[1]) * 3600 + parseInt(match[2]) * 60 + parseInt(match[3]) + parseInt(match[4]) / 1000,
+                end = parseInt(match[5]) * 3600 + parseInt(match[6]) * 60 + parseInt(match[7]) + parseInt(match[8]) / 1000,
+                text = lines.slice(2).join(" ");
+            if (text.trim()) segments.push({ start, end, text });
+          }
+        }
+      });
+      return segments;
+    }
+    function displaySegments(segments) {
+      var container = document.getElementById("presetSegments");
+      container.innerHTML = "";
+      segments.forEach((seg, index) => {
+        var div = document.createElement("div");
+        div.style.marginBottom = "10px";
+        div.style.padding = "5px";
+        div.style.border = "1px solid #ccc";
+        div.innerHTML =
+          "Segment " + (index + 1) + ": " + seg.text + " (" +
+          seg.start.toFixed(1) + " sec - " + seg.end.toFixed(1) + " sec)" +
+          " <button id='playOriginalBtn_" + index + "'>Play Original</button>" +
+          " <button id='playRecordBtn_" + index + "'>Play and Record</button>" +
+          " <button id='stopRecordBtn_" + index + "' disabled>Stop Recording</button>" +
+          " <button id='playSegmentRecordingBtn_" + index + "' disabled>Play Recording</button>" +
+          " <br><div style='margin-top:5px; position:relative;'>" +
+          "    <div style='text-align:center; font-size:12px; margin-bottom:2px;'>Waveform Comparison</div>" +
+          "    <canvas id='segmentWaveform_" + index + "' width='400' height='100' style='background:#f7f7f7; border:1px solid #ccc;'></canvas>" +
+          "    <div style='display:flex; justify-content:space-between; font-size:10px; margin-top:2px;'>" +
+          "      <span style='color:#2196F3;'>■ Original</span>" +
+          "      <span style='color:#4CAF50;'>■ Your Recording</span>" +
+          "    </div>" +
+          " </div>";
+        container.appendChild(div);
+        
+        // Add event listeners after creating the buttons
+        document.getElementById("playOriginalBtn_" + index).onclick = function() {
+          playOriginalSegment(index, seg.start, seg.end);
+        };
+        document.getElementById("playRecordBtn_" + index).onclick = function() {
+          playAndRecordSegment(index, seg.start, seg.end);
+        };
+        document.getElementById("stopRecordBtn_" + index).onclick = function() {
+          stopSegmentRecording(index);
+        };
+        document.getElementById("playSegmentRecordingBtn_" + index).onclick = function() {
+          playSegmentRecording(index);
+        };
+      });
+    }
+    function playSegmentRecording(index) {
+      if (segmentAudioBlobs[index]) {
+        var audioURL = URL.createObjectURL(segmentAudioBlobs[index]);
+        new Audio(audioURL).play();
+      } else {
+        alert("No recording available for this segment.");
+      }
+    }
+    function drawOverlaidWaveforms(originalBuffer, recordedBuffer, canvas) {
+      var ctx = canvas.getContext("2d");
+      var width = canvas.width;
+      var height = canvas.height;
+      var amp = height / 2;
+
+      // Clear canvas
+      ctx.clearRect(0, 0, width, height);
+
+      // Draw grid
+      ctx.strokeStyle = "#eee";
+      ctx.lineWidth = 0.5;
+      for (let i = 0; i <= 10; i++) {
+        let y = (height / 10) * i;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      // Draw center line
+      ctx.beginPath();
+      ctx.strokeStyle = "#ccc";
+      ctx.lineWidth = 1;
+      ctx.moveTo(0, amp);
+      ctx.lineTo(width, amp);
+      ctx.stroke();
+
+      function normalizeAndDrawBuffer(buffer, color, alpha = 0.5) {
+        var data = buffer.getChannelData(0);
+        var step = Math.ceil(data.length / width);
+        
+        // Normalize the data
+        var maxAmp = 0;
+        for (let i = 0; i < data.length; i++) {
+          maxAmp = Math.max(maxAmp, Math.abs(data[i]));
+        }
+        var scale = maxAmp > 0 ? 0.8 / maxAmp : 1;
+
+        // Draw waveform
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color.replace(')', `, ${alpha})`);
+        ctx.lineWidth = 1;
+
+        for (let i = 0; i < width; i++) {
+          let min = 1.0, max = -1.0;
+          for (let j = 0; j < step; j++) {
+            let datum = data[Math.min(Math.floor(i * step + j), data.length - 1)] * scale;
+            min = Math.min(min, datum);
+            max = Math.max(max, datum);
+          }
+          
+          let y1 = ((1 + min) * amp);
+          let y2 = ((1 + max) * amp);
+          
+          // Fill area
+          ctx.fillRect(i, y1, 1, y2 - y1);
+        }
+        ctx.stroke();
+      }
+
+      // Draw original waveform first
+      if (originalBuffer) {
+        normalizeAndDrawBuffer(originalBuffer, 'rgba(33, 150, 243, 1)', 0.3);
+      }
+
+      // Draw recorded waveform on top
+      if (recordedBuffer) {
+        normalizeAndDrawBuffer(recordedBuffer, 'rgba(76, 175, 80, 1)', 0.3);
+      }
+
+      // Add time markers
+      ctx.fillStyle = "#666";
+      ctx.font = "10px Arial";
+      for (let i = 0; i <= 10; i++) {
+        let x = (width / 10) * i;
+        let time = ((originalBuffer?.duration || recordedBuffer?.duration || 0) * i / 10).toFixed(1);
+        ctx.fillText(time + "s", x, height - 2);
+      }
+    }
+
+    // Update playOriginalSegment to store the buffer
+    var originalBuffers = {};
+    
+    function playOriginalSegment(index, start, end) {
+      var origBtn = document.getElementById("playOriginalBtn_" + index);
+      origBtn.disabled = true;
+      player.seekTo(start, true);
+      player.playVideo();
+        var checkInterval = setInterval(() => {
+          if (player.getCurrentTime() >= end) {
+            player.pauseVideo();
+            clearInterval(checkInterval);
+            origBtn.disabled = false;
+          }
+        }, 500);
+    }
+
+    function playAndRecordSegment(index, start, end) {
+      var playBtn = document.getElementById("playRecordBtn_" + index),
+          stopBtn = document.getElementById("stopRecordBtn_" + index);
+      playBtn.disabled = true;
+      playBtn.style.backgroundColor = "gray";
+      stopBtn.disabled = true;
+      player.seekTo(start, true);
+      player.playVideo();
+      var playbackInterval = setInterval(function() {
+        if (player.getCurrentTime() >= end) {
+          clearInterval(playbackInterval);
+          player.pauseVideo();
+          navigator.mediaDevices.getUserMedia({ audio: true })
+            .then(function(stream) {
+              var recorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
+              segmentRecordedChunks[index] = [];
+              recorder.ondataavailable = function(e) {
+                if (e.data.size > 0) segmentRecordedChunks[index].push(e.data);
+              };
+              recorder.onstop = function() {
+                var blob = new Blob(segmentRecordedChunks[index], { type: 'audio/webm' });
+                segmentAudioBlobs[index] = blob;
+                var audioURL = URL.createObjectURL(blob);
+                var playSegmentBtn = document.getElementById("playSegmentRecordingBtn_" + index);
+                playSegmentBtn.disabled = false;
+                playSegmentBtn.onclick = function() {
+                  new Audio(audioURL).play();
+                };
+                // Draw recorded waveform on its dedicated canvas
+                var audioContext = new AudioContext();
+                var reader = new FileReader();
+                reader.onload = function(e) {
+                  audioContext.decodeAudioData(e.target.result, function(buffer) {
+                    var canvas = document.getElementById("segmentWaveform_" + index);
+                    drawOverlaidWaveforms(originalBuffers[index], buffer, canvas);
+                  });
+                };
+                reader.readAsArrayBuffer(blob);
+                
+                playBtn.disabled = false;
+                playBtn.style.backgroundColor = "";
+                stopBtn.disabled = true;
+              };
+              segmentRecorders[index] = recorder;
+              recorder.start();
+              stopBtn.disabled = false;
+            })
+            .catch(function(err) {
+              console.error(err);
+              alert("Could not access microphone for recording.");
+              playBtn.disabled = false;
+              playBtn.style.backgroundColor = "";
+              stopBtn.disabled = true;
+            });
+        }
+      }, 500);
+    };
+
+    // New: Event listener to load and draw original audio waveform
+    document.getElementById("loadOriginalAudio").addEventListener("click", function() {
+      var fileInput = document.getElementById("originalAudioFile");
+      if (fileInput.files.length === 0) {
+        alert("Please select an audio file for the original waveform.");
+        return;
+      }
+      var file = fileInput.files[0];
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var audioContext = new AudioContext();
+        audioContext.decodeAudioData(e.target.result, function(buffer) {
+          var originalCanvas = document.getElementById("originalWaveformCanvas");
+          drawWaveform(buffer, originalCanvas);
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    });
+
+    // Replace existing stopSegmentRecording function with the following:
+    function stopSegmentRecording(index) {
+      if (segmentRecorders[index] && segmentRecorders[index].state !== "inactive") {
+        segmentRecorders[index].stop();
+        console.log("Segment " + index + " recording stopped manually");
+      }
+    }
+
+    function drawWaveformSegment(buffer, canvas, isOriginal = false) {
+      var ctx = canvas.getContext("2d");
+      var data = buffer.getChannelData(0);
+      var step = Math.ceil(data.length / canvas.width);
+      var amp = canvas.height / 2;
+
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw center line
+      ctx.beginPath();
+      ctx.strokeStyle = "#ccc";
+      ctx.moveTo(0, amp);
+      ctx.lineTo(canvas.width, amp);
+      ctx.stroke();
+
+      // Normalize the data
+      var maxAmp = 0;
+      for (let i = 0; i < data.length; i++) {
+        maxAmp = Math.max(maxAmp, Math.abs(data[i]));
+      }
+      var scale = maxAmp > 0 ? 1 / maxAmp : 1;
+
+      // Draw waveform
+      ctx.beginPath();
+      ctx.strokeStyle = isOriginal ? "#2196F3" : "#4CAF50"; // Blue for original, Green for recording
+      ctx.lineWidth = 1;
+
+      for (let i = 0; i < canvas.width; i++) {
+        let min = 1.0, max = -1.0;
+        for (let j = 0; j < step; j++) {
+          let datum = data[(i * step) + j] * scale;
+          if (datum < min) min = datum;
+          if (datum > max) max = datum;
+        }
+        
+        let y1 = ((1 + min) * amp);
+        let y2 = ((1 + max) * amp);
+        
+        ctx.moveTo(i + 0.5, y1);
+        ctx.lineTo(i + 0.5, y2);
+      }
+      ctx.stroke();
+
+      // Add time markers
+      ctx.fillStyle = "#666";
+      ctx.font = "10px Arial";
+      ctx.fillText("0s", 2, 10);
+      ctx.fillText((buffer.duration).toFixed(1) + "s", canvas.width - 20, 10);
+    }
+
+    function drawComparison(originalBuffer, recordedBuffer, origCanvas, recCanvas) {
+      drawWaveformSegment(originalBuffer, origCanvas, true);
+      drawWaveformSegment(recordedBuffer, recCanvas, false);
+    }
+
+    // Make all interactive functions globally available
+    window.playAndRecordSegment = playAndRecordSegment;
+    window.playOriginalSegment = playOriginalSegment;
+    window.stopSegmentRecording = stopSegmentRecording;
+
+    function captureVideoAudio(start, end) {
+      return new Promise((resolve, reject) => {
+        resolve()
+      });
+    }
+
+    function playOriginalSegment(index, start, end) {
+      var origBtn = document.getElementById("playOriginalBtn_" + index);
+      origBtn.disabled = true;
+      player.seekTo(start, true);
+      player.playVideo();
+        var checkInterval = setInterval(() => {
+          if (player.getCurrentTime() >= end) {
+            player.pauseVideo();
+            clearInterval(checkInterval);
+            origBtn.disabled = false;
+          }
+        }, 500);
+    }
+
+    // Update drawOverlaidWaveforms for better visualization
+    function drawOverlaidWaveforms(originalBuffer, recordedBuffer, canvas) {
+      var ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw background grid
+      ctx.fillStyle = "#f7f7f7";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw waveforms with different colors and opacity
+      if (originalBuffer) {
+        drawWaveform(originalBuffer, ctx, "rgba(33, 150, 243, 0.6)", canvas.height);
+      }
+      if (recordedBuffer) {
+        drawWaveform(recordedBuffer, ctx, "rgba(76, 175, 80, 0.6)", canvas.height);
+      }
+      
+      // Draw time markers
+      drawTimeMarkers(ctx, canvas, originalBuffer || recordedBuffer);
+    }
+
+    function drawWaveform(buffer, ctx, color, height) {
+      const data = buffer.getChannelData(0);
+      const step = Math.ceil(data.length / ctx.canvas.width);
+      const amp = height / 2;
+      
+      ctx.beginPath();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      
+      for (let i = 0; i < ctx.canvas.width; i++) {
+        let min = 1.0, max = -1.0;
+        for (let j = 0; j < step; j++) {
+          const datum = data[(i * step) + j];
+          if (datum < min) min = datum;
+          if (datum > max) max = datum;
+        }
+        const y1 = ((1 + min) * amp);
+        const y2 = ((1 + max) * amp);
+        ctx.moveTo(i, y1);
+        ctx.lineTo(i, y2);
+      }
+      ctx.stroke();
+    }
+
+    function drawTimeMarkers(ctx, canvas, buffer) {
+      if (!buffer) return;
+      
+      ctx.fillStyle = "#666";
+      ctx.font = "10px Arial";
+      const duration = buffer.duration;
+      
+      for (let i = 0; i <= 10; i++) {
+        const x = (canvas.width / 10) * i;
+        const time = (duration * i / 10).toFixed(1);
+        ctx.fillText(`${time}s`, x, canvas.height - 5);
+      }
+    }
+
+    function saveProject() {
+      const projectData = {
+        videoId: videoId,
+        segmentStart: document.getElementById("segmentStart").value,
+        segmentEnd: document.getElementById("segmentEnd").value,
+        subtitleFile: document.getElementById("subtitleFile").value,
+        segments: [],
+      };
+    
+      const segments = document.querySelectorAll("#presetSegments > div");
+      segments.forEach((segment, index) => {
+        projectData.segments.push({
+          index: index,
+          recording: segmentAudioBlobs[index] ? URL.createObjectURL(segmentAudioBlobs[index]) : null,
+        });
+      });
+    
+      const jsonString = JSON.stringify(projectData);
+      const blob = new Blob([jsonString], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "shadowing_project.json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+    
+    function loadProject() {
+      const fileInput = document.getElementById("loadProjectFile");
+      if (fileInput.files.length === 0) {
+        alert("Please select a project file.");
+        return;
+      }
+    
+      const file = fileInput.files[0];
+      const reader = new FileReader();
+    
+      reader.onload = function(e) {
+        const projectData = JSON.parse(e.target.result);
+    
+        videoId = projectData.videoId;
+        document.getElementById("videoUrl").value = videoId;
+        player.loadVideoById(videoId);
+        document.getElementById("segmentStart").value = projectData.segmentStart;
+        document.getElementById("segmentEnd").value = projectData.segmentEnd;
+        document.getElementById("subtitleFile").value = projectData.subtitleFile;
+    
+        // Load segments and recordings
+        projectData.segments.forEach((segment) => {
+          if (segment.recording) {
+            fetch(segment.recording)
+              .then(response => response.blob())
+              .then(blob => {
+                segmentAudioBlobs[segment.index] = blob;
+                const playSegmentBtn = document.getElementById(`playSegmentRecordingBtn_${segment.index}`);
+                if (playSegmentBtn) {
+                  playSegmentBtn.disabled = false;
+                  playSegmentBtn.onclick = function() {
+                    playSegmentRecording(segment.index);
+                  };
+                }
+              });
+          }
+        });
+      };
+    
+      reader.readAsText(file);
+    }
+  </script>
+</body>
+</html>
