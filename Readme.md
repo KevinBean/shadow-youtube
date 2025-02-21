@@ -28,6 +28,11 @@ The YouTube Shadowing Tool is a web application designed to help users practice 
 7.  **Save/Load Project:**
     *   Click "Save Project" to save the current project state (video ID, segments, recordings) to a JSON file.
     *   Click "Load Project" to load a previously saved project from a JSON file.
+8.  **Playback Controls:**
+    *   Adjust playback speed using the "Playback Speed" dropdown.
+    *   Enable or disable looping of segments using the "Loop Segment" button.
+9.  **Interactive Vocabulary Assistance:**
+    *   Click on words in each segment to view definitions and hear pronunciation.
 
 ## Planned Enhancements
 
