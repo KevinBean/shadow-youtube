@@ -396,9 +396,13 @@
     </div>
 
     <div class="project-controls">
-      <button id="saveProject">Save Project</button>
+      <button id="saveNewProject">Save New Project</button>
+      <button id="saveProject">Save Changes</button>
       <input type="file" id="loadProjectFile" accept=".json" style="display: none"/>
       <button id="loadProject">Load Project</button>
+      <select id="projectList">
+        <option value="">Select a project</option>
+      </select>
     </div>
 
     <!-- New Playback and Loop Controls -->
@@ -555,8 +559,11 @@
     document.getElementById("playRecordingBtn").addEventListener("click", () => {
       document.getElementById("recordedAudio").play();
     });
+    document.getElementById("saveNewProject").addEventListener("click", saveNewProject);
     document.getElementById("saveProject").addEventListener("click", saveProject);
-    document.getElementById("loadProject").addEventListener("click", loadProject);
+    document.getElementById("loadProject").addEventListener("click", () => document.getElementById("loadProjectFile").click());
+    document.getElementById("loadProjectFile").addEventListener("change", loadProject);
+    document.getElementById("projectList").addEventListener("change", loadSelectedProject);
 
     // New: Playback speed control
     document.getElementById("playbackSpeed").addEventListener("change", function() {
@@ -662,7 +669,7 @@
         
         // Add event listeners for vocabulary lookup
         div.querySelectorAll(".subtitle-text .word").forEach(wordEl => {
-          wordEl.addEventListener("click", () => lookupWord(wordEl.innerText));
+          wordEl.addEventListener("click", () => lookupWord(wordEl.innerText.replace(/[.,!?]/g, "")));
         });
 
         // Register button event handlers
@@ -781,7 +788,24 @@
         }, 500);
     }
 
+    let currentProjectName = null;
+
+    function saveNewProject() {
+      let projectName = prompt("Enter a name for this project:");
+      if (!projectName) {
+        projectName = `Project_${new Date().toISOString()}`;
+        alert(`Project name not provided. Auto-generated name: ${projectName}`);
+      }
+      currentProjectName = projectName;
+      saveProject();
+    }
+
     function saveProject() {
+      if (!currentProjectName) {
+        alert("Please save as a new project first.");
+        return;
+      }
+
       const projectData = {
         videoId: videoId,
         segmentStart: document.getElementById("segmentStart").value,
@@ -789,7 +813,7 @@
         subtitleFile: document.getElementById("subtitleFile").value,
         segments: [],
       };
-    
+
       const segments = document.querySelectorAll("#presetSegments > div");
       segments.forEach((segment, index) => {
         projectData.segments.push({
@@ -797,39 +821,33 @@
           recording: segmentAudioBlobs[index] ? URL.createObjectURL(segmentAudioBlobs[index]) : null,
         });
       });
-    
+
       const jsonString = JSON.stringify(projectData);
-      const blob = new Blob([jsonString], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "shadowing_project.json";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      localStorage.setItem(currentProjectName, jsonString);
+      updateProjectList();
+      console.log(`Project "${currentProjectName}" saved.`);
     }
-    
+
     function loadProject() {
       const fileInput = document.getElementById("loadProjectFile");
       if (fileInput.files.length === 0) {
         alert("Please select a project file.");
         return;
       }
-    
+
       const file = fileInput.files[0];
       const reader = new FileReader();
-    
+
       reader.onload = function(e) {
         const projectData = JSON.parse(e.target.result);
-    
+
         videoId = projectData.videoId;
         document.getElementById("videoUrl").value = videoId;
         player.loadVideoById(videoId);
         document.getElementById("segmentStart").value = projectData.segmentStart;
         document.getElementById("segmentEnd").value = projectData.segmentEnd;
         document.getElementById("subtitleFile").value = projectData.subtitleFile;
-    
+
         // Load segments and recordings
         projectData.segments.forEach((segment) => {
           if (segment.recording) {
@@ -848,9 +866,54 @@
           }
         });
       };
-    
+
       reader.readAsText(file);
     }
+
+    function loadSelectedProject() {
+      const projectName = document.getElementById("projectList").value;
+      if (!projectName) return;
+
+      currentProjectName = projectName;
+      const projectData = JSON.parse(localStorage.getItem(projectName));
+
+      videoId = projectData.videoId;
+      document.getElementById("videoUrl").value = videoId;
+      player.loadVideoById(videoId);
+      document.getElementById("segmentStart").value = projectData.segmentStart;
+      document.getElementById("segmentEnd").value = projectData.segmentEnd;
+      document.getElementById("subtitleFile").value = projectData.subtitleFile;
+
+      // Load segments and recordings
+      projectData.segments.forEach((segment) => {
+        if (segment.recording) {
+          fetch(segment.recording)
+            .then(response => response.blob())
+            .then(blob => {
+              segmentAudioBlobs[segment.index] = blob;
+              const playSegmentBtn = document.getElementById(`playSegmentRecordingBtn_${segment.index}`);
+              if (playSegmentBtn) {
+                playSegmentBtn.disabled = false;
+                playSegmentBtn.onclick = function() {
+                  playSegmentRecording(segment.index);
+                };
+              }
+            });
+        }
+      });
+    }
+
+    function updateProjectList() {
+      const projectList = document.getElementById("projectList");
+      projectList.innerHTML = '<option value="">Select a project</option>';
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        projectList.innerHTML += `<option value="${key}">${key}</option>`;
+      }
+    }
+
+    // Initialize project list on page load
+    window.onload = updateProjectList;
 
     function initAudioPlayer(index, audioBlob) {
       const playerContainer = document.getElementById(`audioPlayer_${index}`);
@@ -1012,8 +1075,25 @@
       });
     }
 
-    // Close modal when clicking overlay
-    document.getElementById('modalOverlay').addEventListener('click', closeModal);
+    // Replace the old modal closing event listeners with these new ones
+    // Listen for clicks on the overlay
+    document.getElementById('modalOverlay').addEventListener('click', function(event) {
+      if (event.target === this) {  // Only if clicking directly on the overlay
+        document.getElementById('dictionaryModal').style.display = 'none';
+        document.getElementById('modalOverlay').style.display = 'none';
+      }
+    });
+
+    // Listen for clicks on the modal itself
+    document.getElementById('dictionaryModal').addEventListener('click', function(event) {
+      event.stopPropagation();  // Prevent clicks inside modal from reaching overlay
+    });
+
+    // Make sure the close button still works
+    document.querySelector('.close-modal').addEventListener('click', function() {
+      document.getElementById('dictionaryModal').style.display = 'none';
+      document.getElementById('modalOverlay').style.display = 'none';
+    });
   </script>
 </body>
 </html>
