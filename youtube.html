@@ -6,30 +6,34 @@
   <style>
     :root {
       --primary: #2196F3;
+      --primary-dark: #1976D2;
       --secondary: #4CAF50;
-      --background: #f5f5f5;
+      --background: #f8f9fa;
       --surface: #ffffff;
-      --text: #333333;
+      --text: #2c3e50;
       --border: #e0e0e0;
-      --shadow: rgba(0, 0, 0, 0.1);
+      --shadow: rgba(0, 0, 0, 0.08);
+      --radius: 12px;
+      --spacing: 24px;
     }
 
     * { box-sizing: border-box; }
 
     body {
-      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
       margin: 0;
-      padding: 20px;
+      padding: 0;
       background: var(--background);
       color: var(--text);
       line-height: 1.6;
     }
 
     h1 {
-      color: var(--primary);
+      color: var(--text);
       text-align: center;
-      margin: 0 0 20px;
-      font-weight: 500;
+      margin: 0 0 var(--spacing);
+      font-weight: 600;
+      font-size: 2rem;
     }
 
     #fixedControls {
@@ -38,136 +42,147 @@
       left: 0;
       width: 100%;
       background: var(--surface);
-      box-shadow: 0 2px 8px var(--shadow);
-      padding: 20px;
+      box-shadow: 0 4px 20px var(--shadow);
+      padding: var(--spacing);
       z-index: 100;
+      border-bottom: 1px solid var(--border);
     }
 
     #playerContainer {
-      max-width: 640px;
-      margin: 0 auto 20px;
-      border-radius: 8px;
+      max-width: 800px;
+      margin: 0 auto var(--spacing);
+      border-radius: var(--radius);
       overflow: hidden;
-      box-shadow: 0 4px 12px var(--shadow);
-    }
-
-    #player {
-      width: 100%;
-      aspect-ratio: 16/9;
+      box-shadow: 0 8px 30px var(--shadow);
     }
 
     .input-group {
       display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
+      gap: 12px;
+      margin-bottom: var(--spacing);
       align-items: center;
+      max-width: 800px;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     input[type="text"],
-    input[type="number"] {
-      padding: 8px 12px;
-      border: 1px solid var(--border);
-      border-radius: 4px;
+    input[type="number"],
+    select {
+      padding: 12px 16px;
+      border: 2px solid var(--border);
+      border-radius: var(--radius);
       flex: 1;
-      font-size: 14px;
+      font-size: 15px;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus,
+    input[type="number"]:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--primary);
     }
 
     button {
       background: var(--primary);
       color: white;
       border: none;
-      padding: 8px 16px;
-      border-radius: 4px;
+      padding: 12px 24px;
+      border-radius: var(--radius);
       cursor: pointer;
-      transition: background 0.2s, transform 0.1s;
+      transition: all 0.2s;
       font-weight: 500;
+      font-size: 15px;
     }
 
     button:hover {
-      background: #1976D2;
+      background: var(--primary-dark);
       transform: translateY(-1px);
     }
 
-    button:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
-
     #scrollableSegments {
-      margin-top: 600px;
-      padding: 20px;
+      margin-top: 700px;
+      padding: var(--spacing);
+      max-width: 1000px;
+      margin-left: auto;
+      margin-right: auto;
     }
 
     #presetSegments {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 16px;
     }
 
     #presetSegments > div {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 16px;
       background: var(--surface);
-      border-radius: 4px;
-      padding: 8px;
-      box-shadow: 0 1px 3px var(--shadow);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: 0 4px 12px var(--shadow);
+      transition: transform 0.2s;
+    }
+
+    #presetSegments > div:hover {
+      transform: translateY(-2px);
     }
 
     .segment-info {
-      min-width: 120px;
+      min-width: 150px;
       white-space: nowrap;
+      font-weight: 500;
     }
 
     .segment-text {
       flex: 1;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin: 0 8px;
+      line-height: 1.5;
+      font-size: 16px;
     }
 
     .segment-buttons {
       display: flex;
-      gap: 4px;
-    }
-
-    .segment-buttons button {
-      padding: 4px 8px;
-      font-size: 0.9em;
-    }
-
-    canvas {
-      border-radius: 4px;
-      margin-top: 10px;
-    }
-
-    .waveform-container {
-      background: #fafafa;
-      padding: 10px;
-      border-radius: 4px;
-      margin-top: 10px;
+      gap: 8px;
     }
 
     .project-controls {
       display: flex;
-      gap: 10px;
-      margin: 20px 0;
+      gap: 12px;
+      margin: var(--spacing) 0;
       justify-content: center;
+      flex-wrap: wrap;
     }
 
-    /* Add subtle animations */
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
+    .playback-controls {
+      background: var(--surface);
+      padding: 16px;
+      border-radius: var(--radius);
+      margin-top: var(--spacing);
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px var(--shadow);
     }
 
-    .fade-in {
-      animation: fadeIn 0.3s ease-in;
+    /* Update Modal Styles */
+    .dictionary-modal {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: var(--spacing);
     }
 
-    /* New styles for playback controls and interactive subtitles */
-    .playback-controls { margin-top: 10px; text-align: center; }
+    .modal-header {
+      border-bottom-color: var(--border);
+    }
+
+    .word-title {
+      font-size: 28px;
+      color: var(--text);
+    }
+
     .subtitle-text span.word { cursor: pointer; color: var(--primary); }
     .subtitle-text span.word:hover { text-decoration: underline; }
     .feedback { margin-top: 20px; font-weight: bold; text-align: center; }
@@ -791,129 +806,61 @@
     let currentProjectName = null;
 
     function saveNewProject() {
-      let projectName = prompt("Enter a name for this project:");
-      if (!projectName) {
-        projectName = `Project_${new Date().toISOString()}`;
-        alert(`Project name not provided. Auto-generated name: ${projectName}`);
-      }
-      currentProjectName = projectName;
-      saveProject();
-    }
-
-    function saveProject() {
-      if (!currentProjectName) {
-        alert("Please save as a new project first.");
-        return;
-      }
-
+      const projectName = prompt("Enter a name for your project:");
+      if (!projectName) return;  // User cancelled or entered empty name
+      
       const projectData = {
+        name: projectName,
         videoId: videoId,
-        segmentStart: document.getElementById("segmentStart").value,
-        segmentEnd: document.getElementById("segmentEnd").value,
-        subtitleFile: document.getElementById("subtitleFile").value,
-        segments: [],
+        segments: Array.from(document.querySelectorAll("#presetSegments > div")).map(div => {
+          const info = div.querySelector(".segment-info").textContent;
+          const [start, end] = info.match(/(\d+\.?\d*)/g).map(Number);
+          const text = div.querySelector(".segment-text").textContent.trim();
+          return { start, end, text };
+        })
       };
 
-      const segments = document.querySelectorAll("#presetSegments > div");
-      segments.forEach((segment, index) => {
-        projectData.segments.push({
-          index: index,
-          recording: segmentAudioBlobs[index] ? URL.createObjectURL(segmentAudioBlobs[index]) : null,
-        });
-      });
-
-      const jsonString = JSON.stringify(projectData);
-      localStorage.setItem(currentProjectName, jsonString);
-      updateProjectList();
-      console.log(`Project "${currentProjectName}" saved.`);
+      // Create download with proper filename from project name
+      const safeProjectName = projectName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+      const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `${safeProjectName}-${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);  // Required for Firefox
+      a.click();
+      document.body.removeChild(a);  // Clean up
+      URL.revokeObjectURL(a.href);   // Clean up
     }
 
     function loadProject() {
       const fileInput = document.getElementById("loadProjectFile");
-      if (fileInput.files.length === 0) {
-        alert("Please select a project file.");
-        return;
-      }
+      if (fileInput.files.length === 0) return;
 
-      const file = fileInput.files[0];
       const reader = new FileReader();
-
       reader.onload = function(e) {
-        const projectData = JSON.parse(e.target.result);
-
-        videoId = projectData.videoId;
-        document.getElementById("videoUrl").value = videoId;
-        player.loadVideoById(videoId);
-        document.getElementById("segmentStart").value = projectData.segmentStart;
-        document.getElementById("segmentEnd").value = projectData.segmentEnd;
-        document.getElementById("subtitleFile").value = projectData.subtitleFile;
-
-        // Load segments and recordings
-        projectData.segments.forEach((segment) => {
-          if (segment.recording) {
-            fetch(segment.recording)
-              .then(response => response.blob())
-              .then(blob => {
-                segmentAudioBlobs[segment.index] = blob;
-                const playSegmentBtn = document.getElementById(`playSegmentRecordingBtn_${segment.index}`);
-                if (playSegmentBtn) {
-                  playSegmentBtn.disabled = false;
-                  playSegmentBtn.onclick = function() {
-                    playSegmentRecording(segment.index);
-                  };
-                }
-              });
+        try {
+          const projectData = JSON.parse(e.target.result);
+          videoId = projectData.videoId;
+          document.getElementById("videoUrl").value = videoId;
+          player.loadVideoById(videoId);
+          
+          if (projectData.segments && projectData.segments.length > 0) {
+            displaySegments(projectData.segments);
           }
-        });
-      };
-
-      reader.readAsText(file);
-    }
-
-    function loadSelectedProject() {
-      const projectName = document.getElementById("projectList").value;
-      if (!projectName) return;
-
-      currentProjectName = projectName;
-      const projectData = JSON.parse(localStorage.getItem(projectName));
-
-      videoId = projectData.videoId;
-      document.getElementById("videoUrl").value = videoId;
-      player.loadVideoById(videoId);
-      document.getElementById("segmentStart").value = projectData.segmentStart;
-      document.getElementById("segmentEnd").value = projectData.segmentEnd;
-      document.getElementById("subtitleFile").value = projectData.subtitleFile;
-
-      // Load segments and recordings
-      projectData.segments.forEach((segment) => {
-        if (segment.recording) {
-          fetch(segment.recording)
-            .then(response => response.blob())
-            .then(blob => {
-              segmentAudioBlobs[segment.index] = blob;
-              const playSegmentBtn = document.getElementById(`playSegmentRecordingBtn_${segment.index}`);
-              if (playSegmentBtn) {
-                playSegmentBtn.disabled = false;
-                playSegmentBtn.onclick = function() {
-                  playSegmentRecording(segment.index);
-                };
-              }
-            });
+        } catch (err) {
+          console.error("Error loading project:", err);
+          alert("Failed to load project file. Make sure it's a valid project JSON file.");
         }
-      });
+      };
+      reader.readAsText(fileInput.files[0]);
     }
 
-    function updateProjectList() {
-      const projectList = document.getElementById("projectList");
-      projectList.innerHTML = '<option value="">Select a project</option>';
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        projectList.innerHTML += `<option value="${key}">${key}</option>`;
-      }
-    }
-
-    // Initialize project list on page load
-    window.onload = updateProjectList;
+    // Remove localStorage related code and simplify project controls HTML
+    document.querySelector(".project-controls").innerHTML = `
+      <button id="saveNewProject">Save Project</button>
+      <input type="file" id="loadProjectFile" accept=".json" style="display: none"/>
+      <button id="loadProject">Load Project</button>
+    `;
 
     function initAudioPlayer(index, audioBlob) {
       const playerContainer = document.getElementById(`audioPlayer_${index}`);
